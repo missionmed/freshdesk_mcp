@@ -1,27 +1,24 @@
 [project]
 name = "freshdesk-mcp"
-version = "1.2.0"
-description = "An MCP server for Freshdesk"
+version = "2.0.0"
+description = "MCP server for the Freshdesk API with full endpoint coverage and computed reporting"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "build>=1.2.2.post1",
-    "httpx==0.28.1",
-    "mcp[cli]>=1.3.0",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.9.0",
     "pydantic>=2.10.6",
 ]
 
 [[project.authors]]
-name = "Gopi Krishnan"
-email = "gopi@effy.co.in"
-
-[[project.authors]]
-name = "Maanaesh Swamy"
-email = "maanaesh.s@effy.co.in"
+name = "MissionMed"
 
 [build-system]
-requires = [ "hatchling", "setuptools", "wheel"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/freshdesk_mcp"]
 
 [project.scripts]
 freshdesk-mcp = "freshdesk_mcp.server:main"

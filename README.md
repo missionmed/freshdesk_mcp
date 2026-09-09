@@ -1,227 +1,120 @@
 # Freshdesk MCP Server
-[![smithery badge](https://smithery.ai/badge/@effytech/freshdesk_mcp)](https://smithery.ai/server/@effytech/freshdesk_mcp)
 
-[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/effytech/freshdesk_mcp)](https://archestra.ai/mcp-catalog/effytech__freshdesk_mcp)
+An MCP server for the Freshdesk API with **complete endpoint coverage** and a
+reporting layer that Freshdesk itself does not provide.
 
-An MCP server implementation that integrates with Freshdesk, enabling AI models to interact with Freshdesk modules and perform various support operations.
+Forked from [effytech/freshdesk_mcp](https://github.com/effytech/freshdesk_mcp)
+and substantially rewritten: 59 tools became **248**, every documented endpoint
+is now implemented, and a coverage test keeps it that way.
 
-## Features
+## What changed from upstream
 
-- **Freshdesk Integration**: Seamless interaction with Freshdesk API endpoints
-- **AI Model Support**: Enables AI models to perform support operations through Freshdesk
-- **Automated Ticket Management**: Handle ticket creation, updates, and responses
+| | Upstream | This fork |
+|---|---|---|
+| Tools | 59 | 248 |
+| Endpoint coverage | partial | all 220 documented endpoints |
+| Rate limiting | none | honours `Retry-After`, retries 429 and 5xx |
+| Pagination | manual `page`/`per_page` only | `fetch_all` on every list tool |
+| Historical tickets | impossible (30-day cap) | `updated_since` on list_tickets |
+| Reporting | none | 6 computed report tools |
+| CSAT / time entries / SLA | none | full support |
+| Automations | none | full CRUD |
+| Structure | one 1277-line file | 16 focused modules over a shared client |
 
-## Components
+### Newly covered areas
 
-### Tools
+Satisfaction (CSAT, new and legacy), time entries, SLA policies, business hours,
+products, email configs and mailboxes, automatic Bcc, automation rules,
+scenario automations, custom objects, collaboration threads, discussion forums,
+ticket forms and field sections, skills, roles, exports and imports, archived
+tickets, watchers, ticket merge and forward, bulk update/delete, outbound
+messages, and knowledge-base translations.
 
-The server offers several tools for Freshdesk operations:
+## Reporting
 
-- `create_ticket`: Create new support tickets
-  - **Inputs**:
-    - `subject` (string, required): Ticket subject
-    - `description` (string, required): Ticket description
-    - `source` (number, required): Ticket source code
-    - `priority` (number, required): Ticket priority level
-    - `status` (number, required): Ticket status code
-    - `email` (string, optional): Email of the requester
-    - `requester_id` (number, optional): ID of the requester
-    - `custom_fields` (object, optional): Custom fields to set on the ticket
-    - `additional_fields` (object, optional): Additional top-level fields
+Freshdesk has **no analytics or reports API** - the Analytics dashboard numbers
+are not exposed anywhere. These tools reconstruct the same picture from raw
+tickets (`include=stats`), satisfaction ratings and time entries:
 
-- `update_ticket`: Update existing tickets
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket to update
-    - `ticket_fields` (object, required): Fields to update
+- `ticket_volume_report` - counts by status, priority, source, group, agent, type or day
+- `response_time_report` - first-response and resolution mean/median/p90/p95, plus SLA breach rates
+- `agent_performance_report` - per-agent assigned/resolved and speed
+- `csat_report` - rating distribution, positive %, per agent
+- `time_tracking_report` - billable vs non-billable hours by agent
+- `backlog_report` - live open tickets, age and overdue count
 
-- `delete_ticket`: Delete a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket to delete
+All period reports take `updated_since`, because **Freshdesk returns only the
+last 30 days of tickets without it**.
 
-- `search_tickets`: Search for tickets based on criteria
-  - **Inputs**:
-    - `query` (string, required): Search query string
+## Configuration
 
-- `get_ticket_fields`: Get all ticket fields
-  - **Inputs**:
-    - None
+| Variable | Required | Notes |
+|---|---|---|
+| `FRESHDESK_DOMAIN` | yes | `yourcompany.freshdesk.com`. A bare subdomain or full URL is also accepted. |
+| `FRESHDESK_API_KEY` | yes | Freshdesk > profile menu > Profile Settings > Your API Key. |
+| `TRANSPORT` | no | `http` (default) or `stdio`. |
+| `PORT` / `HOST` | no | Defaults `8080` / `0.0.0.0`. |
+| `LOG_LEVEL` | no | Default `INFO`. |
 
-- `get_tickets`: Get all tickets
-  - **Inputs**:
-    - `page` (number, optional): Page number to fetch
-    - `per_page` (number, optional): Number of tickets per page
+The API key inherits the permissions of the agent it belongs to, so an agent
+without admin rights will get 403s on the admin tools.
 
-- `get_ticket`: Get a single ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket to get
+## Running
 
-- `get_ticket_conversation`: Get conversation for a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-
-- `create_ticket_reply`: Reply to a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-    - `body` (string, required): Content of the reply
-    - `cc_emails` (array of strings, optional): Additional email addresses added to the 'cc' field of the outgoing email. These supplement the ticket requester, who always remains the primary recipient
-    - `bcc_emails` (array of strings, optional): Additional email addresses added to the 'bcc' field of the outgoing email. These supplement the ticket requester, who always remains the primary recipient
-    - `from_email` (string, optional): Email address the reply is sent from
-    - `user_id` (number, optional): ID of the agent who is adding the reply
-
-- `create_ticket_note`: Add a note to a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-    - `body` (string, required): Content of the note
-
-- `update_ticket_conversation`: Update a conversation
-  - **Inputs**:
-    - `conversation_id` (number, required): ID of the conversation
-    - `body` (string, required): Updated content
-
-- `view_ticket_summary`: Get the summary of a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-
-- `update_ticket_summary`: Update the summary of a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-    - `body` (string, required): New summary content
-
-- `delete_ticket_summary`: Delete the summary of a ticket
-  - **Inputs**:
-    - `ticket_id` (number, required): ID of the ticket
-
-- `get_agents`: Get all agents
-  - **Inputs**:
-    - `page` (number, optional): Page number
-    - `per_page` (number, optional): Number of agents per page
-
-- `view_agent`: Get a single agent
-  - **Inputs**:
-    - `agent_id` (number, required): ID of the agent
-
-- `create_agent`: Create a new agent
-  - **Inputs**:
-    - `agent_fields` (object, required): Agent details
-
-- `update_agent`: Update an agent
-  - **Inputs**:
-    - `agent_id` (number, required): ID of the agent
-    - `agent_fields` (object, required): Fields to update
-
-- `search_agents`: Search for agents
-  - **Inputs**:
-    - `query` (string, required): Search query
-
-- `list_contacts`: Get all contacts
-  - **Inputs**:
-    - `page` (number, optional): Page number
-    - `per_page` (number, optional): Contacts per page
-
-- `get_contact`: Get a single contact
-  - **Inputs**:
-    - `contact_id` (number, required): ID of the contact
-
-- `search_contacts`: Search for contacts
-  - **Inputs**:
-    - `query` (string, required): Search query
-
-- `update_contact`: Update a contact
-  - **Inputs**:
-    - `contact_id` (number, required): ID of the contact
-    - `contact_fields` (object, required): Fields to update
-
-- `list_companies`: Get all companies
-  - **Inputs**:
-    - `page` (number, optional): Page number
-    - `per_page` (number, optional): Companies per page
-
-- `view_company`: Get a single company
-  - **Inputs**:
-    - `company_id` (number, required): ID of the company
-
-- `search_companies`: Search for companies
-  - **Inputs**:
-    - `query` (string, required): Search query
-
-- `find_company_by_name`: Find a company by name
-  - **Inputs**:
-    - `name` (string, required): Company name
-
-- `list_company_fields`: Get all company fields
-  - **Inputs**:
-    - None
-
-## Getting Started
-
-### Installing via Smithery
-
-To install freshdesk_mcp for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@effytech/freshdesk_mcp):
+Local, over stdio:
 
 ```bash
-npx -y @smithery/cli install @effytech/freshdesk_mcp --client claude
+uv venv && . .venv/bin/activate && uv pip install -e .
+TRANSPORT=stdio FRESHDESK_DOMAIN=... FRESHDESK_API_KEY=... freshdesk-mcp
 ```
 
-### Prerequisites
+Hosted (Railway or any container host) - the Dockerfile defaults to HTTP and
+serves MCP at `/mcp`:
 
-- A Freshdesk account (sign up at [freshdesk.com](https://freshdesk.com))
-- Freshdesk API key
-- `uvx` installed (`pip install uv` or `brew install uv`)
+```bash
+docker build -t freshdesk-mcp . && docker run -p 8080:8080 \
+  -e FRESHDESK_DOMAIN=... -e FRESHDESK_API_KEY=... freshdesk-mcp
+```
 
-### Configuration
-
-1. Generate your Freshdesk API key from the Freshdesk admin panel
-2. Set up your domain and authentication details
-
-### Usage with Claude Desktop
-
-1. Install Claude Desktop if you haven't already
-2. Add the following configuration to your `claude_desktop_config.json`:
+Claude Code / Claude Desktop, over stdio:
 
 ```json
-"mcpServers": {
-  "freshdesk-mcp": {
-    "command": "uvx",
-    "args": [
-        "freshdesk-mcp"
-    ],
-    "env": {
-      "FRESHDESK_API_KEY": "<YOUR_FRESHDESK_API_KEY>",
-      "FRESHDESK_DOMAIN": "<YOUR_FRESHDESK_DOMAIN>"
+{
+  "mcpServers": {
+    "freshdesk": {
+      "command": "freshdesk-mcp",
+      "env": {
+        "FRESHDESK_DOMAIN": "yourcompany.freshdesk.com",
+        "FRESHDESK_API_KEY": "your-key",
+        "TRANSPORT": "stdio"
+      }
     }
   }
 }
 ```
 
-**Important Notes**:
-- Replace `YOUR_FRESHDESK_API_KEY` with your actual Freshdesk API key
-- Replace `YOUR_FRESHDESK_DOMAIN` with your Freshdesk domain (e.g., `yourcompany.freshdesk.com`)
-
-## Example Operations
-
-Once configured, you can ask Claude to perform operations like:
-
-- "Create a new ticket with subject 'Payment Issue for customer A101' and description as 'Reaching out for a payment issue in the last month for customer A101', where customer email is a101@acme.com and set priority to high"
-- "Update the status of ticket #12345 to 'Resolved'"
-- "List all high-priority tickets assigned to the agent John Doe"
-- "List previous tickets of customer A101 in last 30 days"
-
-
-## Testing
-
-For testing purposes, you can start the server manually:
+## Tests
 
 ```bash
-uvx freshdesk-mcp --env FRESHDESK_API_KEY=<your_api_key> --env FRESHDESK_DOMAIN=<your_domain>
+python tests/test_units.py       # config parsing, error shaping, report maths
+python tests/check_coverage.py   # every documented endpoint has a tool
 ```
 
-## Troubleshooting
+`tests/freshdesk_endpoints.txt` is extracted from the curl examples in the
+[official API docs](https://developers.freshdesk.com/api/). When Freshdesk ships
+new endpoints, re-extract it and the coverage test will name what is missing.
 
-- Verify your Freshdesk API key and domain are correct
-- Ensure proper network connectivity to Freshdesk servers
-- Check API rate limits and quotas
-- Verify the `uvx` command is available in your PATH
+## Notes and gotchas
 
-## License
-
-This MCP server is licensed under the MIT License. See the LICENSE file in the project repository for full details.
+- **The 30-day default.** `GET /tickets` returns only the last 30 days unless
+  `updated_since` is set. Every reporting tool requires it for this reason.
+- **`include=stats`** is what carries `first_responded_at` and `resolved_at`.
+  Without it there is nothing to compute response times from.
+- **Search is capped** at 10 pages / 300 results. For bulk reads use
+  `list_tickets(fetch_all=True)`, which pages properly.
+- **Deep pagination stops at 300 pages** (30,000 tickets) on Freshdesk's side.
+  Reports report `truncated: true` when they hit their cap.
+- **Numeric enums**: call `describe_ticket_enums()` rather than guessing what
+  `status: 3` means.
+- **Automation rules** are fiddly; call `describe_automation_rule_schema()`
+  before `create_automation_rule`.
