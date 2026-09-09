@@ -119,7 +119,7 @@ GET    /api/v2/discussions/topics/followed_by
 GET    /api/v2/discussions/topics/participated_by
 GET    /api/v2/email/mailboxes
 POST   /api/v2/email/mailboxes
-PUT    /api/v2/email/mailboxes
+PUT    /api/v2/email/mailboxes/[id]
 DELETE /api/v2/email/mailboxes/[id]
 GET    /api/v2/email/mailboxes/[id]
 PUT    /api/v2/email/settings

@@ -113,16 +113,22 @@ def register(mcp) -> None:
 
     @mcp.tool()
     @api_tool
-    async def update_email_mailbox(fields: JSON) -> Any:
+    async def update_email_mailbox(mailbox_id: int, fields: JSON) -> Any:
         """Update an email mailbox.
 
-        Freshdesk updates mailboxes on the collection endpoint, so the mailbox
-        id goes inside `fields` rather than in the URL.
+        WARNING: this endpoint replaces the whole mailbox, and its validator
+        only accepts `plain`, `login` or `cram_md5` for
+        incoming/outgoing.authentication. A mailbox connected over OAuth
+        (`xoauth2`, e.g. Gmail) therefore CANNOT be round-tripped through here -
+        sending its own config back is rejected, and forcing it through would
+        drop the OAuth connection. Change OAuth mailboxes in the Freshdesk UI
+        (Admin > Email > the mailbox), including the display name.
 
         Args:
-            fields: Must include the mailbox "id", plus the values to change.
+            mailbox_id: Mailbox id, from list_email_mailboxes.
+            fields: Full mailbox payload to write.
         """
-        return await client.put("email/mailboxes", fields)
+        return await client.put(f"email/mailboxes/{mailbox_id}", fields)
 
     @mcp.tool()
     @api_tool
