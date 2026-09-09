@@ -8,8 +8,11 @@ from __future__ import annotations
 import logging
 import os
 
+import uvicorn
 from mcp.server.mcpserver import MCPServer
+from starlette.responses import JSONResponse
 
+from .auth import BearerAuthMiddleware
 from .config import ConfigError, get_api_key, get_domain
 from .tools import register_all
 
@@ -21,8 +24,14 @@ logger = logging.getLogger("freshdesk_mcp")
 
 
 def build_server() -> MCPServer:
-    mcp = MCPServer("freshdesk", version="2.0.0")
+    mcp = MCPServer("freshdesk", version="2.1.0")
     register_all(mcp)
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health(_request):  # noqa: ANN001 - Starlette request
+        """Unauthenticated liveness probe."""
+        return JSONResponse({"status": "ok", "server": "freshdesk-mcp"})
+
     return mcp
 
 
@@ -47,16 +56,25 @@ def main() -> None:
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8080"))
-    logger.info("Starting Freshdesk MCP server on http://%s:%s/mcp", host, port)
-    mcp.run(
-        transport="streamable-http",
-        host=host,
-        port=port,
-        # Stateless keeps every request self-contained, which is what a hosted
-        # multi-client deployment behind a load balancer needs.
-        stateless_http=True,
-        json_response=True,
+
+    # Stateless keeps every request self-contained, which is what a hosted
+    # multi-client deployment behind a load balancer needs.
+    app = mcp.streamable_http_app(
+        stateless_http=True, json_response=True, host=host
     )
+
+    token = os.getenv("MCP_AUTH_TOKEN", "").strip()
+    if token:
+        app = BearerAuthMiddleware(app, token)
+        logger.info("Bearer authentication enabled")
+    else:
+        logger.warning(
+            "MCP_AUTH_TOKEN is not set. The endpoint exposes destructive tools "
+            "and is UNAUTHENTICATED; set MCP_AUTH_TOKEN to require a bearer token."
+        )
+
+    logger.info("Starting Freshdesk MCP server on http://%s:%s/mcp", host, port)
+    uvicorn.run(app, host=host, port=port, log_level=os.getenv("LOG_LEVEL", "info").lower())
 
 
 if __name__ == "__main__":

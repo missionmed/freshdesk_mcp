@@ -51,13 +51,31 @@ last 30 days of tickets without it**.
 | Variable | Required | Notes |
 |---|---|---|
 | `FRESHDESK_DOMAIN` | yes | `yourcompany.freshdesk.com`. A bare subdomain or full URL is also accepted. |
-| `FRESHDESK_API_KEY` | yes | Freshdesk > profile menu > Profile Settings > Your API Key. |
+| `FRESHDESK_API_KEY` | yes | Freshdesk > profile menu > Profile Settings > Your API Key. Requires "API Key access" to be enabled for that agent under Admin > Agents, and revealing it needs a reCAPTCHA. |
+| `MCP_AUTH_TOKEN` | strongly recommended | Require `Authorization: Bearer <token>` on every request. |
 | `TRANSPORT` | no | `http` (default) or `stdio`. |
 | `PORT` / `HOST` | no | Defaults `8080` / `0.0.0.0`. |
 | `LOG_LEVEL` | no | Default `INFO`. |
 
 The API key inherits the permissions of the agent it belongs to, so an agent
 without admin rights will get 403s on the admin tools.
+
+## Authentication
+
+The MCP endpoint exposes destructive tools - deleting tickets, and replying to
+them, which sends real email as the helpdesk. A public URL is not an acceptable
+boundary on its own.
+
+Set `MCP_AUTH_TOKEN` and every request must carry it:
+
+```
+Authorization: Bearer <MCP_AUTH_TOKEN>
+```
+
+`GET /health` stays public so platform health checks keep working. If
+`MCP_AUTH_TOKEN` is unset the server starts unauthenticated and logs a warning.
+
+Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
 ## Running
 
@@ -73,7 +91,7 @@ serves MCP at `/mcp`:
 
 ```bash
 docker build -t freshdesk-mcp . && docker run -p 8080:8080 \
-  -e FRESHDESK_DOMAIN=... -e FRESHDESK_API_KEY=... freshdesk-mcp
+  -e FRESHDESK_DOMAIN=... -e FRESHDESK_API_KEY=... -e MCP_AUTH_TOKEN=... freshdesk-mcp
 ```
 
 Claude Code / Claude Desktop, over stdio:
@@ -97,6 +115,7 @@ Claude Code / Claude Desktop, over stdio:
 
 ```bash
 python tests/test_units.py       # config parsing, error shaping, report maths
+python tests/test_auth.py        # bearer gate accepts only the exact token
 python tests/check_coverage.py   # every documented endpoint has a tool
 ```
 
